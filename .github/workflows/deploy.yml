@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Radar de Ofertas | Buscador Inteligente</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --green: #16a34a;
+      --red: #ef4444;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, sans-serif; }
+    body { background: var(--bg); color: var(--text); min-height: 100vh; padding: 24px 16px; }
+
+    .container { max-width: 960px; margin: 0 auto; }
+
+    header { text-align: center; margin-bottom: 32px; }
+    header h1 { font-size: 2rem; font-weight: 800; margin-bottom: 8px; }
+    header p { color: var(--muted); font-size: 1rem; }
+
+    .search-box {
+      display: flex;
+      gap: 10px;
+      background: var(--card);
+      padding: 10px;
+      border-radius: 14px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+      margin-bottom: 16px;
+    }
+
+    .search-box input {
+      flex: 1;
+      border: none;
+      outline: none;
+      font-size: 1rem;
+      padding: 10px 14px;
+    }
+
+    .search-box button {
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 12px 24px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .search-box button:hover { background: var(--primary-hover); }
+    .search-box button:disabled { background: #94a3b8; cursor: not-allowed; }
+
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 28px; }
+    .chip {
+      background: #e2e8f0;
+      color: #334155;
+      border: none;
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+    .chip:hover { background: #cbd5e1; }
+
+    .status-box {
+      display: none;
+      text-align: center;
+      padding: 32px;
+      background: var(--card);
+      border-radius: 14px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+      margin-bottom: 24px;
+    }
+
+    .spinner {
+      width: 36px; height: 36px;
+      border: 4px solid #e2e8f0;
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 14px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 20px;
+    }
+
+    .card {
+      background: var(--card);
+      border-radius: 14px;
+      padding: 16px;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.05);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .card img {
+      width: 100%;
+      height: 180px;
+      object-fit: contain;
+      margin-bottom: 12px;
+      background: #fff;
+      border-radius: 8px;
+    }
+
+    .card h3 {
+      font-size: 0.95rem;
+      line-height: 1.35;
+      margin-bottom: 10px;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .price-old { text-decoration: line-through; color: var(--muted); font-size: 0.85rem; }
+    .badge {
+      background: #fee2e2; color: var(--red);
+      font-weight: 700; font-size: 0.75rem;
+      padding: 2px 8px; border-radius: 6px; margin-left: 6px;
+    }
+    .price-now { font-size: 1.4rem; font-weight: 800; color: var(--green); margin: 4px 0 14px; }
+
+    .btn-buy {
+      display: block;
+      text-align: center;
+      background: var(--green);
+      color: #fff;
+      text-decoration: none;
+      padding: 11px;
+      border-radius: 10px;
+      font-weight: 700;
+      transition: opacity 0.2s;
+    }
+    .btn-buy:hover { opacity: 0.9; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🎯 Radar de Ofertas</h1>
+      <p>Digite o que procura e encontramos o melhor preço de vendedores confiáveis na hora.</p>
+    </header>
+
+    <form class="search-box" id="searchForm">
+      <input type="text" id="searchInput" placeholder="Ex: air fryer grande, tv 50 4k, furadeira boa..." required />
+      <button type="submit" id="searchBtn">Buscar</button>
+    </form>
+
+    <div class="chips">
+      <button class="chip" type="button" onclick="buscarSugestao('air fryer 5 litros')">Air Fryer 5L</button>
+      <button class="chip" type="button" onclick="buscarSugestao('smart tv 50 4k')">Smart TV 50" 4K</button>
+      <button class="chip" type="button" onclick="buscarSugestao('fone bluetooth cancelamento ruido')">Fone Bluetooth</button>
+      <button class="chip" type="button" onclick="buscarSugestao('parafusadeira bateria')">Parafusadeira</button>
+    </div>
+
+    <div class="status-box" id="statusBox">
+      <div class="spinner"></div>
+      <h3 id="statusTitle">Garimpando as melhores ofertas...</h3>
+      <p style="color: var(--muted); margin-top: 6px;">Comparando preços e reputação dos vendedores. Isso leva poucos segundos.</p>
+    </div>
+
+    <div class="grid" id="resultsGrid"></div>
+  </div>
+
+  <script>
+    // Substituídos automaticamente pelo GitHub Actions na hora do deploy
+    const SUPABASE_URL = "__SUPABASE_URL__";
+    const SUPABASE_ANON_KEY = "__SUPABASE_ANON_KEY__";
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    const form = document.getElementById("searchForm");
+    const input = document.getElementById("searchInput");
+    const btn = document.getElementById("searchBtn");
+    const statusBox = document.getElementById("statusBox");
+    const statusTitle = document.getElementById("statusTitle");
+    const resultsGrid = document.getElementById("resultsGrid");
+
+    function normalizar(texto) {
+      return texto.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    }
+
+    function buscarSugestao(termo) {
+      input.value = termo;
+      form.dispatchEvent(new Event("submit"));
+    }
+
+    function renderizarProdutos(lista) {
+      resultsGrid.innerHTML = "";
+      if (!lista || lista.length === 0) {
+        resultsGrid.innerHTML = "<p style='grid-column:1/-1; text-align:center; color:#64748b;'>Nenhuma oferta encontrada para esse termo.</p>";
+        return;
+      }
+
+      lista.forEach(p => {
+        const preco = Number(p.preco || 0);
+        const orig = Number(p.preco_original || preco);
+        const desconto = orig > preco ? Math.round(((orig - preco) / orig) * 100) : 0;
+
+        const card = document.createElement("div");
+        card.className = "card";
+        card.innerHTML = `
+          <div>
+            <img src="${p.imagem_url || 'https://via.placeholder.com/300?text=Oferta'}" alt="${p.titulo}" />
+            <h3>${p.titulo}</h3>
+          </div>
+          <div>
+            ${desconto > 0 ? `<div><span class="price-old">R$ ${orig.toFixed(2).replace('.', ',')}</span><span class="badge">-${desconto}%</span></div>` : ""}
+            <div class="price-now">R$ ${preco.toFixed(2).replace('.', ',')}</div>
+            <a class="btn-buy" href="${p.link_afiliado}" target="_blank" rel="noopener noreferrer">🛒 Ver Oferta</a>
+          </div>
+        `;
+        resultsGrid.appendChild(card);
+      });
+    }
+
+    async function aguardarResultado(buscaId) {
+      const limiteTentativas = 30; // ~60 segundos
+      for (let i = 0; i < limiteTentativas; i++) {
+        await new Promise(r => setTimeout(r, 2000));
+
+        const { data, error } = await supabaseClient
+          .from("buscas_clientes")
+          .select("status, resultados")
+          .eq("id", buscaId)
+          .single();
+
+        if (error) continue;
+
+        if (data.status === "concluido") {
+          statusBox.style.display = "none";
+          btn.disabled = false;
+          renderizarProdutos(data.resultados);
+          return;
+        }
+        if (data.status === "erro") {
+          statusTitle.textContent = "Não foi possível concluir a busca agora. Tente novamente.";
+          btn.disabled = false;
+          return;
+        }
+      }
+      statusTitle.textContent = "A busca demorou mais que o esperado. Tente novamente em instantes.";
+      btn.disabled = false;
+    }
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const termo = input.value.trim();
+      if (!termo) return;
+
+      const termoNorm = normalizar(termo);
+      btn.disabled = true;
+      resultsGrid.innerHTML = "";
+      statusBox.style.display = "block";
+      statusTitle.textContent = `Buscando "${termo}"...`;
+
+      // 1. Verifica cache das últimas 2 horas
+      const duasHorasAtras = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+      const { data: cache } = await supabaseClient
+        .from("buscas_clientes")
+        .select("resultados")
+        .eq("termo_normalizado", termoNorm)
+        .eq("status", "concluido")
+        .gte("created_at", duasHorasAtras)
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      if (cache && cache.length > 0 && cache[0].resultados.length > 0) {
+        statusBox.style.display = "none";
+        btn.disabled = false;
+        renderizarProdutos(cache[0].resultados);
+        return;
+      }
+
+      // 2. Se não tem cache, cria pedido na fila para o Python
+      const { data: novaBusca, error } = await supabaseClient
+        .from("buscas_clientes")
+        .insert([{ termo_original: termo, termo_normalizado: termoNorm, status: "pendente" }])
+        .select()
+        .single();
+
+      if (error) {
+        statusTitle.textContent = "Erro ao enviar busca. Tente novamente.";
+        btn.disabled = false;
+        return;
+      }
+
+      aguardarResultado(novaBusca.id);
+    });
+  </script>
+</body>
+</html>
